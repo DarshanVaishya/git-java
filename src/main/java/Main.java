@@ -1,22 +1,19 @@
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.math.BigInteger;
 import java.nio.file.Files;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 
-public class Main {
-	private static int indexOf(byte[] array, byte target) {
-		for (int i = 0; i < array.length; i++) {
-			if (array[i] == target) {
-				return i;
-			}
-		}
-		return -1;
-	}
+import org.apache.commons.codec.digest.DigestUtils;
 
+public class Main {
 	public static void main(String[] args) throws IOException {
 		// You can use print statements as follows for debugging, they'll be visible
 		// when running tests.
@@ -47,13 +44,58 @@ public class Main {
 				File blobFile = new File("./.git/objects/" + folderName + "/" + fileName);
 
 				try {
-					String blob = new BufferedReader(new InputStreamReader(new InflaterInputStream(new FileInputStream(blobFile)))).readLine();
+					BufferedReader reader = new BufferedReader(
+							new InputStreamReader(new InflaterInputStream(new FileInputStream(blobFile))));
+					String blob = reader.readLine();
 					String content = blob.substring(blob.indexOf("\0") + 1);
 					System.out.print(content);
-				} catch(IOException e) {
+
+					reader.close();
+				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			}
+
+			case "hash-object" -> {
+				try {
+					String name = args[2];
+
+					// Read file content
+					File file = new File(name);
+					String fileContent = Files.readString(file.toPath());
+
+					// Compute hash of file
+					String newContent = "blob " + fileContent.length() + "\0" + fileContent;
+					String hash = DigestUtils.sha1Hex(newContent);
+					System.out.println(hash);
+
+					// zlib compress the content
+					ByteArrayOutputStream baos = new ByteArrayOutputStream();
+					DeflaterOutputStream dos = new DeflaterOutputStream(baos);
+					dos.write(newContent.getBytes());
+					dos.flush();
+					dos.close();
+
+					// Create blob file
+					String folderName = hash.substring(0, 2);
+					String fileName = hash.substring(2);
+
+					File blobFolder = new File("./.git/objects/" + folderName);
+
+					if (!blobFolder.exists()) {
+						blobFolder.mkdirs();
+					}
+					File blobFile = new File("./.git/objects/" + folderName + "/" + fileName);
+
+					Files.write(blobFile.toPath(), baos.toByteArray());
+
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+
+			}
+
 			default -> System.out.println("Unknown command: " + command);
 		}
 	}
