@@ -4,7 +4,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -26,7 +29,7 @@ public class GitOperations {
 		}
 	}
 
-	public void handleCatFile(String hash) {
+	public void readBlob(String hash) {
 		String folderName = hash.substring(0, 2);
 		String fileName = hash.substring(2);
 		File blobFile = new File("./.git/objects/" + folderName + "/" + fileName);
@@ -45,7 +48,7 @@ public class GitOperations {
 		}
 	}
 
-	public void handleHashObject(String fileName) {
+	public void writeBlob(String fileName) {
 		try {
 			// Read file content
 			File file = new File(fileName);
@@ -77,9 +80,9 @@ public class GitOperations {
 
 	public byte[] getZlibHash(String content) {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		// Deflater uses Zlib to compress data
+		DeflaterOutputStream dos = new DeflaterOutputStream(baos);
 		try {
-			// Deflater uses Zlib to compress data
-			DeflaterOutputStream dos = new DeflaterOutputStream(baos);
 			dos.write(content.getBytes());
 			dos.flush();
 			dos.close();
@@ -89,4 +92,31 @@ public class GitOperations {
 
 		return baos.toByteArray();
 	}
+
+	public void readTree(String treeSHA) {
+		String path = String.format(".git/objects/%s/%s", treeSHA.substring(0, 2), treeSHA.substring(2));
+		String content = null;
+		List<String> entries = new ArrayList<>();
+
+		try(InputStream in = new InflaterInputStream(new FileInputStream(path))) {
+			content = new String(in.readAllBytes());
+		} catch(IOException e) {
+			e.printStackTrace();
+		}
+
+		int startEntry = content.indexOf('\0') + 1;
+
+		for(int i = startEntry; i < content.length(); i++) {
+			if(content.charAt(i) == '\0') {
+				String entry = content.substring(startEntry, i);
+				String fileName = entry.split(" ")[1];
+				entries.add(fileName);
+
+				i = startEntry = i + 21;
+			}
+		}
+
+		entries.stream().forEach(System.out::println);
+	}
+
 }
